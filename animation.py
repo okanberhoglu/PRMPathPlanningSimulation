@@ -10,62 +10,29 @@ import math
 from obstacle import Obstacle
 
 class Animation:
-    def __init__(self, robot: Robot, obstacles: list[Polygon]):
+    def __init__(self, goal_point, robot: Robot, obstacles: list[Polygon], path=None):
         self.robot = robot
         self.obstacles = obstacles
-        self.user_points = []
-        self.obs_helper = Obstacle()
-        self.c_space_grid = None
-        self.c_space_resolution = 50
-        self.q1_range = np.linspace(-6, 6, self.c_space_resolution)
-        self.q2_range = np.linspace(-np.pi, np.pi, self.c_space_resolution)
-
-    def compute_c_space_grid(self):
-        print("Computing C-Space Grid...")
-        self.c_space_grid = np.zeros((self.c_space_resolution, self.c_space_resolution))
-        q3_fixed = self.q_start[2]
-        q4_fixed = self.q_start[3]
-        
-        for i, q1 in enumerate(self.q1_range):
-            for j, q2 in enumerate(self.q2_range):
-                q = np.array([q1, q2, q3_fixed, q4_fixed])
-                segments = self.robot.get_link_segments(q)
-                collision = False
-                for obstacle in self.obstacles:
-                    poly_points = obstacle.get_xy()
-                    for segment in segments:
-                        p1, p2 = segment
-                        if self.obs_helper.check_collision(poly_points, p1, p2):
-                            collision = True
-                            break
-                    if collision: break
-                
-                if collision:
-                    self.c_space_grid[j, i] = 1
-
-    def solve_ik(self, target_point):
-        best_q = None
-        min_dist = float('inf')
-        q3_fixed = self.q_start[2]
-        q4_fixed = self.q_start[3]
-        
-        for q1 in self.q1_range:
-            for q2 in self.q2_range:
-                q = np.array([q1, q2, q3_fixed, q4_fixed])
-                segments = self.robot.get_link_segments(q)
-                eff_pos = segments[-1][1]
-                
-                dist = np.linalg.norm(eff_pos - np.array(target_point))
-                if dist < min_dist:
-                    min_dist = dist
-                    best_q = (q1, q2)
-                    
-        return best_q
+        self.goal_point = goal_point
+        self.path = path
 
     def update(self, frame):
-        alpha = frame / 100.0
-        if alpha > 1.0: alpha = 1.0
-        q_current = (1 - alpha) * self.q_start + alpha * self.q_end
+        if self.path is not None and len(self.path) > 1:
+            # Interpolate through path waypoints
+            total_frames = 100
+            segment_length = total_frames / (len(self.path) - 1)
+            segment_idx = int(frame / segment_length)
+            
+            if segment_idx >= len(self.path) - 1:
+                q_current = self.path[-1]
+            else:
+                alpha = (frame - segment_idx * segment_length) / segment_length
+                q_current = (1 - alpha) * self.path[segment_idx] + alpha * self.path[segment_idx + 1]
+        else:
+            # Simple linear interpolation
+            alpha = frame / 100.0
+            if alpha > 1.0: alpha = 1.0
+            q_current = (1 - alpha) * self.q_start + alpha * self.q_end
         
         segments = self.robot.get_link_segments(q_current)
         
@@ -73,21 +40,25 @@ class Animation:
             p1, p2 = segment
             line.set_data([p1[0], p2[0]], [p1[1], p2[1]])
             
-        self.c_space_dot.set_data([q_current[0]], [q_current[1]])
-            
-        return self.lines_2d + [self.c_space_dot]
+        return self.lines_2d
 
     def animate(self, q_start, q_end):
         self.q_start = q_start
         self.q_end = q_end
         
-        self.compute_c_space_grid()
+        # Verify goal distance
+        segments_end = self.robot.get_link_segments(q_end)
+        end_effector_pos = segments_end[-1][1]
+        goal_distance = np.linalg.norm(end_effector_pos - np.array(self.goal_point))
+        print(f"Final end effector position: ({end_effector_pos[0]:.3f}, {end_effector_pos[1]:.3f})")
+        print(f"Goal position: ({self.goal_point[0]:.3f}, {self.goal_point[1]:.3f})")
+        print(f"Distance to goal: {goal_distance:.3f} units")
         
         fig = plt.figure(figsize=(12, 6))
 
         segments = self.robot.get_link_segments(q_start)
 
-        ax_2d = fig.add_subplot(121)
+        ax_2d = fig.add_subplot(111)
         self.lines_2d = []
         for segment in segments:
             p1, p2 = segment
@@ -97,8 +68,22 @@ class Animation:
         for obstacle in self.obstacles:
             ax_2d.add_patch(obstacle)
 
-        for point in self.user_points:
-            ax_2d.plot(point[0], point[1], 'go', markersize=10)
+        # Plot the planned path if available
+        if self.path is not None and len(self.path) > 1:
+            path_positions = []
+            for q in self.path:
+                segments = self.robot.get_link_segments(q)
+                end_effector_pos = segments[-1][1]  # End of last link
+                path_positions.append(end_effector_pos)
+            
+            path_positions = np.array(path_positions)
+            ax_2d.plot(path_positions[:, 0], path_positions[:, 1], 
+                      'r--', linewidth=1.5, alpha=0.7, label='Planned Path')
+            ax_2d.plot(path_positions[:, 0], path_positions[:, 1], 
+                      'ro', markersize=4, alpha=0.5)
+
+        ax_2d.plot(self.goal_point[0], self.goal_point[1], 'go', markersize=10, label='Goal')
+        ax_2d.legend()
 
         ax_2d.set_title("Workspace")
         ax_2d.set_xlabel('X')
@@ -107,20 +92,6 @@ class Animation:
         ax_2d.set_ylim(-6, 6)
         ax_2d.set_aspect('equal', adjustable='box')
         ax_2d.grid(True)
-        
-        ax_cs = fig.add_subplot(122)
-        ax_cs.set_title("Configuration space")
-        ax_cs.set_xlabel("q1 (rad)")
-        ax_cs.set_ylabel("q2 (rad)")
-        ax_cs.imshow(self.c_space_grid, origin='lower', extent=[-np.pi, np.pi, -np.pi, np.pi], cmap='Greys')
-        
-        for point in self.user_points:
-            best_q = self.solve_ik(point)
-            if best_q:
-                ax_cs.plot(best_q[0], best_q[1], 'go', markersize=12, label='Goal')
-        
-        self.c_space_dot, = ax_cs.plot([], [], 'bo', markersize=8, label='Robot Config')
-        ax_cs.legend()
 
         ani = FuncAnimation(fig, self.update, frames=100, interval=50, blit=False, repeat=False)
 
@@ -142,17 +113,3 @@ class Animation:
         ax.set_xlim(-2, 5)
         ax.set_ylim(-4, 4)
         plt.show()
-
-    def add_green_point(self):
-        try:
-            inp = input("Enter x,y for a green point (e.g. 1.5,2): ")
-            parts = inp.split(',')
-            if len(parts) == 2:
-                x = float(parts[0].strip())
-                y = float(parts[1].strip())
-                self.user_points.append((x, y))
-                print(f"Added point: ({x}, {y})")
-            else:
-                print("Invalid format. Please use x,y")
-        except ValueError:
-            print("Invalid input. Please enter numbers.")

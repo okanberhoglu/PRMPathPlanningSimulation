@@ -2,8 +2,8 @@ import numpy as np
 from robot import Robot
 from animation import Animation
 from obstacle import Obstacle
+from planner import Planner
 from matplotlib.patches import Polygon
-import math
     
 def main():
     prrr_robot = Robot()
@@ -26,14 +26,21 @@ def main():
 
     obstacles = Obstacle().generate_obstacles(num_obstacles=5, x_lim=(-6, 6), y_lim=(-6, 6), avoid_points=avoid)
 
-    animation = Animation(prrr_robot, obstacles)
-    if user_point:
-        animation.user_points.append(user_point)
-
     q_start = np.array([0.0, 0.0, 0.0, 0.0])
-    q_end = np.array([1.0, math.pi/2, -math.pi/2, 0.0])
+    
+    planner = Planner(prrr_robot, obstacles, q_start)
+    path, q_end = planner.plan(user_point)
+    
+    if path is None or q_end is None:
+        print("Planning failed!")
+    else:
+        print(f"Goal configuration: q_end = {q_end}")
+        
+        # Visualize the PRM roadmap and planned path
+        planner.visualize_roadmap(path_indices=planner.path_indices)
 
-    animation.animate(q_start, q_end)
+        animation = Animation(user_point, prrr_robot, obstacles, path=path)
+        animation.animate(q_start, q_end)
 
 if __name__ == '__main__':
     main()

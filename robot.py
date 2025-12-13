@@ -12,22 +12,6 @@ class Robot:
         ])
         return matrix
     
-    def __rotate_x(self, th):
-        matrix = np.array([
-            [1, 0, 0],
-            [0, np.cos(th), -np.sin(th)],
-            [0, np.sin(th), np.cos(th)],
-        ])
-        return matrix
-
-    def __rotate_y(self, th):
-        matrix = np.array([
-            [np.cos(th), 0, np.sin(th)],
-            [0, 1, 0],
-            [-np.sin(th), 0, np.cos(th)],
-        ])
-        return matrix
-    
     def __rotate_z(self, th):
         matrix = np.array([
             [np.cos(th), -np.sin(th), 0],
