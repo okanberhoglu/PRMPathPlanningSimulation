@@ -36,7 +36,6 @@ def main():
     else:
         print(f"Goal configuration: q_end = {q_end}")
         
-        # Visualize the PRM roadmap and planned path
         planner.visualize_roadmap(path_indices=planner.path_indices)
 
         animation = Animation(user_point, prrr_robot, obstacles, path=path)

@@ -18,7 +18,7 @@ class Planner:
         self.q4_min, self.q4_max = -np.pi, np.pi
         
         self.num_samples = 100 
-        self.k_neighbors = 15   
+        self.k_neighbors = 25   
         
         self.goal_tolerance = 0.02 
         
@@ -171,7 +171,6 @@ class Planner:
             visited.add(current)
             
             if current == goal_idx:
-                # Reconstruct path
                 path_indices = []
                 while current in came_from:
                     path_indices.append(current)

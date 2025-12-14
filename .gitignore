@@ -136,3 +136,11 @@ cython_debug/
 
 # VS Code
 .vscode/
+
+# Latex
+report/.synctex.gz
+report/.log
+report/.aux
+report/.fdb_latexmk
+report/.fls
+
