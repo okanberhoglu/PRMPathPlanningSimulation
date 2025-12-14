@@ -1,1 +1,1 @@
-# AStarPathPlanningSimulation
+# PRMPathPlanningSimulation
